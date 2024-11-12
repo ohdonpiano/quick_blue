@@ -90,9 +90,11 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         // TODO connecting
       }
       "disconnect" -> {
+        Log.v(TAG, "disconnect")
         val deviceId = call.argument<String>("deviceId")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+          ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+        Log.v(TAG, "cleaning connection")
         cleanConnection(gatt)
         result.success(null)
         //FIXME If `disconnect` is called before BluetoothGatt.STATE_CONNECTED
@@ -101,7 +103,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
       "discoverServices" -> {
         val deviceId = call.argument<String>("deviceId")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+          ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
         gatt.discoverServices()
         result.success(null)
       }
@@ -111,7 +113,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val characteristic = call.argument<String>("characteristic")!!
         val bleInputProperty = call.argument<String>("bleInputProperty")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+          ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
         gatt.setNotifiable(service to characteristic, bleInputProperty)
         result.success(null)
       }
@@ -119,7 +121,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val deviceId = call.argument<String>("deviceId")!!
         val expectedMtu = call.argument<Int>("expectedMtu")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+          ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
         gatt.requestMtu(expectedMtu)
         result.success(null)
       }
@@ -128,7 +130,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val service = call.argument<String>("service")!!
         val characteristic = call.argument<String>("characteristic")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+          ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
         val readResult = gatt.getCharacteristic(service to characteristic)?.let {
           gatt.readCharacteristic(it)
         }
@@ -143,7 +145,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
         val characteristic = call.argument<String>("characteristic")!!
         val value = call.argument<ByteArray>("value")!!
         val gatt = knownGatts.find { it.device.address == deviceId }
-                ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
+          ?: return result.error("IllegalArgument", "Unknown deviceId: $deviceId", null)
         val writeResult = gatt.getCharacteristic(service to characteristic)?.let {
           it.value = value
           gatt.writeCharacteristic(it)
@@ -162,6 +164,9 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
   private fun cleanConnection(gatt: BluetoothGatt) {
     knownGatts.remove(gatt)
     gatt.disconnect()
+    Log.v(TAG, "cleanConnection: gatt disconnected")
+    gatt.close()
+    Log.v(TAG, "cleanConnection: gatt closed")
   }
 
   private val scanCallback = object : ScanCallback() {
@@ -172,10 +177,10 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
     override fun onScanResult(callbackType: Int, result: ScanResult) {
       Log.v(TAG, "onScanResult: $callbackType + $result")
       scanResultSink?.success(mapOf<String, Any>(
-              "name" to (result.device.name ?: ""),
-              "deviceId" to result.device.address,
-              "manufacturerDataHead" to (result.manufacturerDataHead ?: byteArrayOf()),
-              "rssi" to result.rssi
+        "name" to (result.device.name ?: ""),
+        "deviceId" to result.device.address,
+        "manufacturerDataHead" to (result.manufacturerDataHead ?: byteArrayOf()),
+        "rssi" to result.rssi
       ))
     }
 
@@ -284,10 +289,10 @@ val ScanResult.manufacturerDataHead: ByteArray?
   }
 
 fun Short.toByteArray(byteOrder: ByteOrder = ByteOrder.LITTLE_ENDIAN): ByteArray =
-        ByteBuffer.allocate(2 /*Short.SIZE_BYTES*/).order(byteOrder).putShort(this).array()
+  ByteBuffer.allocate(2 /*Short.SIZE_BYTES*/).order(byteOrder).putShort(this).array()
 
 fun BluetoothGatt.getCharacteristic(serviceCharacteristic: Pair<String, String>) =
-        getService(UUID.fromString(serviceCharacteristic.first)).getCharacteristic(UUID.fromString(serviceCharacteristic.second))
+  getService(UUID.fromString(serviceCharacteristic.first)).getCharacteristic(UUID.fromString(serviceCharacteristic.second))
 
 private val DESC__CLIENT_CHAR_CONFIGURATION = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
