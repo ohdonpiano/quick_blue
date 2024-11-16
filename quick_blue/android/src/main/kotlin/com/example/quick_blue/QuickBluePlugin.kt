@@ -5,6 +5,9 @@ import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -31,6 +34,26 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
   private lateinit var eventScanResult : EventChannel
   private lateinit var messageConnector: BasicMessageChannel<Any>
 
+  private val bluetoothReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+      if (BluetoothAdapter.ACTION_STATE_CHANGED == intent.action) {
+        val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+        if (state == BluetoothAdapter.STATE_OFF) {
+          Log.v(TAG, "Bluetooth turned off, cleaning known GATT connections.")
+          cleanAllConnections()
+        }
+      }
+    }
+  }
+
+  private fun cleanAllConnections() {
+    knownGatts.forEach { gatt ->
+      Log.v(TAG, "Cleaning connection for device: ${gatt.device.address}")
+      cleanConnection(gatt)
+    }
+    knownGatts.clear()
+  }
+
   override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     method = MethodChannel(flutterPluginBinding.binaryMessenger, "quick_blue/method")
     eventScanResult = EventChannel(flutterPluginBinding.binaryMessenger, "quick_blue/event.scanResult")
@@ -42,6 +65,8 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
     context = flutterPluginBinding.applicationContext
     mainThreadHandler = Handler(Looper.getMainLooper())
     bluetoothManager = flutterPluginBinding.applicationContext.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+
+    context.registerReceiver(bluetoothReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
   }
 
   override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -49,6 +74,8 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
 
     eventScanResult.setStreamHandler(null)
     method.setMethodCallHandler(null)
+
+    context.unregisterReceiver(bluetoothReceiver)
   }
 
   private lateinit var context: Context
@@ -175,7 +202,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
     }
 
     override fun onScanResult(callbackType: Int, result: ScanResult) {
-      Log.v(TAG, "onScanResult: $callbackType + $result")
+      //Log.v(TAG, "onScanResult: $callbackType + $result")
       scanResultSink?.success(mapOf<String, Any>(
         "name" to (result.device.name ?: ""),
         "deviceId" to result.device.address,
@@ -185,7 +212,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
     }
 
     override fun onBatchScanResults(results: MutableList<ScanResult>?) {
-      Log.v(TAG, "onBatchScanResults: $results")
+      //Log.v(TAG, "onBatchScanResults: $results")
     }
   }
 
@@ -268,7 +295,7 @@ class QuickBluePlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHand
     }
 
     override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-      Log.v(TAG, "onCharacteristicChanged ${characteristic.uuid}, ${characteristic.value.contentToString()}")
+      //Log.v(TAG, "onCharacteristicChanged ${characteristic.uuid}, ${characteristic.value.contentToString()}")
       sendMessage(messageConnector, mapOf(
         "deviceId" to gatt.device.address,
         "characteristicValue" to mapOf(
